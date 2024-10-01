@@ -1,0 +1,39 @@
+•	Record a screen capture showing the full workflow (registration, login, token usage, adding/removing favorites, and recommendations).
+
+Workflow for Recording:
+
+1.	Register a new user.
+    	•	Endpoint: POST /api/register/
+{
+  "username": "test_user",
+  "password": "test_pwd"
+}
+
+2.	Get the JWT token and make authorized requests.
+    	•	Endpoint: POST /api/token/
+{
+  "username": "your_username",
+  "password": "your_password"
+}
+{
+  "refresh": "your_refresh_token",
+  "access": "your_access_token"
+}
+	
+3.	List user favorites.
+    	•	Endpoint: GET /api/user_favorites/list_favorites/
+
+	
+4.	Add books to favorites
+Showing the successful and failed (if exceeding limits) responses.
+    	•	Endpoint: POST /api/user_favorites/add_favorite/
+{
+  "book_ids": [1, 2, 3, 4]
+}
+
+5.	Show the recommendation system.
+    	•	Endpoint: GET /api/user_favorites/recommendations/
+
+6.	Access the API documentation and walk through the endpoints.
+    http://127.0.0.1:8000/api/schema/swagger-ui/
+    http://127.0.0.1:8000/api/schema/redoc/
