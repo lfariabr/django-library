@@ -5,8 +5,8 @@ Workflow for Recording:
 1.	Register a new user.
     	•	Endpoint: POST /api/register/
 {
-  "username": "test_user",
-  "password": "test_pwd"
+  "username": "testing",
+  "password": "testing"
 }
 
 2.	Get the JWT token and make authorized requests.

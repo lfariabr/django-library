@@ -22,7 +22,18 @@ class Book(models.Model):
     work_id = models.CharField(max_length=255, unique=True)
     book_id = models.CharField(max_length=255, unique=True)
 
+    # Adding the missing fields
+    isbn = models.CharField(max_length=13, blank=True, null=True)
+    isbn13 = models.CharField(max_length=13, blank=True, null=True)
+    average_rating = models.FloatField(default=0.0)
+    ratings_count = models.IntegerField(default=0)
+    num_pages = models.IntegerField(default=0)
+    language = models.CharField(max_length=50, blank=True, null=True)
+    publication_date = models.CharField(max_length=20, blank=True, null=True)
+    description = models.TextField(blank=True, null=True)
+    
     def __str__(self):
+        
         
         return self.title
 

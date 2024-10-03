@@ -1,0 +1,25 @@
+# Python
+*.py[cod]
+__pycache__/
+
+# Environment
+.env
+venv/
+venv/*
+
+# Django
+db.sqlite3
+/media/
+staticfiles/
+
+# MacOS specific
+.DS_Store
+
+# Logs
+*.log
+
+# Byte-compiled
+*.pyc
+
+# JSON big loads
+*.json

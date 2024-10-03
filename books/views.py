@@ -7,9 +7,41 @@ from .serializers import BookSerializer, AuthorSerializer, UserFavoritesSerializ
 from rest_framework.decorators import action, api_view
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.pagination import PageNumberPagination
+from books.recommendation.recommendation_engine import get_recommendations
+import pandas as pd
+import pickle
+
+import os
+from django.conf import settings
+
+# Safely load precomputed data if it exists
+pkl_dir = settings.BASE_DIR  # Using Django's BASE_DIR for file paths
+
+try:
+    with open(os.path.join(pkl_dir, 'tfidf_matrix_10k.pkl'), 'rb') as f:
+        tfidf_matrix = pickle.load(f)
+
+    with open(os.path.join(pkl_dir, 'cosine_sim_matrix_10k.pkl'), 'rb') as f:
+        cosine_sim_matrix = pickle.load(f)
+
+    with open(os.path.join(pkl_dir, 'df_books_10k.pkl'), 'rb') as f:
+        df_books = pickle.load(f)
+
+except FileNotFoundError:
+    tfidf_matrix, cosine_sim_matrix, df_books = None, None, None
+    print("Precomputed files not found. Run the precompute script first.")
+
+# Loading precomputed data once during app initialization
+# with open('tfidf_matrix.pkl', 'rb') as f:
+#     tfidf_matrix = pickle.load(f)
+
+# with open('cosine_sim_matrix.pkl', 'rb') as f:
+#     cosine_sim_matrix = pickle.load(f)
+
+# with open('df_books.pkl', 'rb') as f:
+#     df_books = pickle.load(f)
 
 # Create your views here.
-
 class CustomPagination(PageNumberPagination):
     page_size = 100
     page_size_query_param = 'page_size'
@@ -48,7 +80,10 @@ class UserFavoritesViewSet(viewsets.ModelViewSet):
     pagination_class = CustomPagination
 
     def get_queryset(self):
-        return UserFavorites.objects.filter(user=self.request.user).order_by('id')
+        if self.request.user.is_authenticated:
+            return UserFavorites.objects.filter(user=self.request.user).order_by('id')
+        else:
+            return UserFavorites.objects.none()  # Return an empty queryset if the user is not authenticated
     
     def perform_create(self, serializer):
         # automatically set the user field to current logged user
@@ -70,28 +105,28 @@ class UserFavoritesViewSet(viewsets.ModelViewSet):
     # Adding Favorites    
     @action(detail=False, methods=['POST'])
     def add_favorite(self, request):
-        # Recebendo a lista de IDs de livros
+        # Receiving this of books
         book_ids = request.data.get('book_ids', [])
 
-        # Verificação para garantir que IDs foram fornecidos
+        # Check to make sure we have ID
         if not book_ids:
             return Response({'status': 'No books provided'}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Garantindo que só haja um registro de favoritos por usuário
+        # Making sure 1 request x user
         user_favorites, _ = UserFavorites.objects.get_or_create(user=request.user)
 
-        # Filtrando os livros com os IDs fornecidos
+        # Filtering
         books = Book.objects.filter(id__in=book_ids)
 
-        # Verificando se os livros foram encontrados no banco de dados
+        # Checking if books are found on db
         if not books.exists():
             return Response({'status': 'No books found with the provided IDs'}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Verificando se a adição de novos livros excede o limite
-        if user_favorites.favorites.count() + books.count() > 10:
+        # checking limits
+        if user_favorites.favorites.count() + books.count() >= 20:
             return Response({'status': 'Maximum number of books reached'}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Adicionando livros aos favoritos
+        # Adding new books
         user_favorites.favorites.add(*books)
 
         # Retornando a resposta com a lista atualizada de favoritos
@@ -140,26 +175,93 @@ class UserFavoritesViewSet(viewsets.ModelViewSet):
     # UPGRADES: 
     # 1) sklearn for content-based filtering (TfidVectorizer and cosine_similarity)
     # 2) scikit-surprise for collaborative filtering (KNNBasic)
+    ### VERSION 1
+    # @action(detail=False, methods=['GET'])
+    # def recommendations(self, request):
+        
+    #     # Getting user favorites
+    #     user_favorites, _ = UserFavorites.objects.get_or_create(user=request.user)
+    #     favorite_books = user_favorites.favorites.all()
+
+    #     print("Favorites: ", favorite_books)
+
+    #     # Getting a list of authors of the user's favorite books
+    #     favorite_authors = set(book.author for book in favorite_books)
+    #     # Recommend books bys these authors... that were not added to favorites yet
+    #     recommended_books = Book.objects.filter(author__in=favorite_authors).exclude(id__in=favorite_books.values_list('id', flat=True))[:5]
+    #     print("Recommended: ", recommended_books)
+
+    #     if not recommended_books.exists():
+    #         return Response({'status': 'No recommendations found'}, status=status.HTTP_404_NOT_FOUND)
+    #     # Serializing the recommended books
+    #     serializer = BookSerializer(recommended_books, many=True)
+    #     return Response(serializer.data)
+    
+    ### VERSION 2
+    # Loading df_books
+    # def load_books_from_db(self):
+    #     books = Book.objects.all().values()
+    #     return pd.DataFrame(books)
+    
+    # @action(detail=False, methods=['GET'])
+    # def recommendations(self, request):
+    #     # Load the books DataFrame
+
+    #     df_books = self.load_books_from_db()  # Use self to call the method
+        
+    #     # Getting user favorites
+    #     user_favorites, _ = UserFavorites.objects.get_or_create(user=request.user)
+    #     favorite_books = user_favorites.favorites.all()
+
+    #     if not favorite_books.exists():
+    #         return Response({'status': 'No favorite books found'}, status=status.HTTP_404_NOT_FOUND)
+
+    #     # Recommend books based on the first favorite book (or adjust as needed)
+    #     favorite_book = favorite_books.first()
+
+    #     # Use the get_recommendations function based on the book's title
+    #     # recommended_titles = get_recommendations(favorite_book.title)
+    #     recommended_titles = get_recommendations(favorite_book.title, df_books=df_books)
+
+    #     # Fetch the recommended books from the database
+    #     recommended_books = Book.objects.filter(title__in=recommended_titles).exclude(id__in=favorite_books.values_list('id', flat=True))
+        
+    #     if not recommended_books.exists():
+    #         return Response({'status': 'No recommendations found'}, status=status.HTTP_404_NOT_FOUND)
+
+    #     # Serializing the recommended books
+    #     serializer = BookSerializer(recommended_books, many=True)
+    #     return Response(serializer.data)
+    
+    #### VERSION 3 - PRE COMPUTED MATRIX
     @action(detail=False, methods=['GET'])
     def recommendations(self, request):
-        
-        # Getting user favorites
         user_favorites, _ = UserFavorites.objects.get_or_create(user=request.user)
         favorite_books = user_favorites.favorites.all()
 
-        print("Favorites: ", favorite_books)
+        if not favorite_books.exists():
+            return Response({'status': 'No favorite books found'}, status=status.HTTP_404_NOT_FOUND)
 
-        # Getting a list of authors of the user's favorite books
-        favorite_authors = set(book.author for book in favorite_books)
-        # Recommend books bys these authors... that were not added to favorites yet
-        recommended_books = Book.objects.filter(author__in=favorite_authors).exclude(id__in=favorite_books.values_list('id', flat=True))[:5]
-        print("Recommended: ", recommended_books)
+        favorite_book = favorite_books.first()
 
-        if not recommended_books.exists():
-            return Response({'status': 'No recommendations found'}, status=status.HTTP_404_NOT_FOUND)
-        # Serializing the recommended books
-        serializer = BookSerializer(recommended_books, many=True)
-        return Response(serializer.data)
+        # Get the index of the favorite book
+        indices = pd.Series(df_books.index, index=df_books['title']).drop_duplicates()
+        if favorite_book.title not in indices:
+            return Response({'status': 'Favorite book not found in precomputed data'}, status=status.HTTP_404_NOT_FOUND)
+
+        idx = indices[favorite_book.title]
+        sim_scores = list(enumerate(cosine_sim_matrix[idx]))
+
+        # Sorting by similarity scores
+        sim_scores = sorted(sim_scores, key=lambda x: x[1], reverse=True)
+        sim_scores = sim_scores[1:11]  # Get top 5 recommendations
+
+        # Getting the book titles for the recommendations
+        sim_indices = [i[0] for i in sim_scores]
+        recommended_books = df_books['title'].iloc[sim_indices]
+
+        # Return the recommendations
+        return Response({'recommended_titles': recommended_books.tolist()})
 
 # JWT Auth for Registering and Login
 from rest_framework import status
