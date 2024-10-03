@@ -23,3 +23,7 @@ staticfiles/
 
 # JSON big loads
 *.json
+
+db.sqlite3
+*.pkldb.sqlite3
+*.pkl

@@ -129,7 +129,7 @@ class UserFavoritesViewSet(viewsets.ModelViewSet):
         # Adding new books
         user_favorites.favorites.add(*books)
 
-        # Retornando a resposta com a lista atualizada de favoritos
+        # Return response
         return Response({
             'status': f'{books.count()} books added to favorites!',
             'favorites': [book.title for book in user_favorites.favorites.all()]
@@ -141,20 +141,15 @@ class UserFavoritesViewSet(viewsets.ModelViewSet):
     def remove_favorite(self, request):
         book_id = request.data.get('book_id')
 
-        # Garantir que o ID do livro foi fornecido
         if not book_id:
             return Response({'status': 'No book ID provided'}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Buscar o livro pelo ID
         try:
             book = Book.objects.get(id=book_id)
         except Book.DoesNotExist:
             return Response({'status': 'Book not found'}, status=status.HTTP_404_NOT_FOUND)
 
-        # Buscar ou criar favoritos do usuário
         user_favorites, _ = UserFavorites.objects.get_or_create(user=request.user)
-
-        # Remover o livro dos favoritos
         user_favorites.favorites.remove(book)
 
         return Response({'status': 'Book removed from favorites!'}, status=status.HTTP_200_OK)
